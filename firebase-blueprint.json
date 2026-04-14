@@ -1,0 +1,90 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "collegeId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["trainee", "admin"] },
+        "stats": {
+          "type": "object",
+          "properties": {
+            "totalReflections": { "type": "number" },
+            "averageScore": { "type": "number" },
+            "badges": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      },
+      "required": ["uid", "collegeId", "displayName"]
+    },
+    "Reflection": {
+      "title": "Reflection",
+      "description": "A guided reflection document based on Gibbs Cycle",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "week": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "title": { "type": "string" },
+        "status": { "type": "string", "enum": ["draft", "completed"] },
+        "qualityScore": { "type": "number" },
+        "aiFeedback": { "type": "string" },
+        "responses": { "type": "object" }
+      },
+      "required": ["id", "userId", "week", "date", "title", "status"]
+    },
+    "Collaboration": {
+      "title": "Collaboration",
+      "description": "Shared reflection for peer or supervisor review",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderEmail": { "type": "string" },
+        "senderName": { "type": "string" },
+        "recipientEmail": { "type": "string" },
+        "content": { "type": "string" },
+        "type": { "type": "string", "enum": ["peer", "supervisor"] },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "senderEmail", "recipientEmail", "content", "type", "status", "createdAt"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "Feedback on a shared reflection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "collaborationId": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorName": { "type": "string" },
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "collaborationId", "authorName", "text", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile data"
+    },
+    "/reflections/{reflectionId}": {
+      "schema": "Reflection",
+      "description": "Individual reflection documents"
+    },
+    "/collaborations/{collabId}": {
+      "schema": "Collaboration",
+      "description": "Collaboration invitations and shared reflections"
+    },
+    "/collaborations/{collabId}/comments/{commentId}": {
+      "schema": "Comment",
+      "description": "Comments on shared reflections"
+    }
+  }
+}

@@ -1,0 +1,127 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required, email format)
+    //   - displayName: string (optional)
+    //   - photoURL: string (optional)
+    //   - role: string (trainee, admin)
+    //   - stats: map (optional)
+    //
+    // Collection: reflections
+    // Document ID: {reflectionId}
+    // Fields:
+    //   - id: string (required)
+    //   - userId: string (required, matches owner)
+    //   - week: number (required)
+    //   - date: string (required, ISO 8601)
+    //   - title: string (required, max 100)
+    //   - status: string (draft, completed)
+    //   - qualityScore: number (optional)
+    //   - aiFeedback: string (optional)
+    //   - responses: map (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "sakina.alblushi1@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}.*");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             (!('role' in data) || data.role in ['trainee', 'admin']);
+    }
+
+    function isValidReflection(data) {
+      return data.keys().hasAll(['id', 'userId', 'week', 'date', 'title', 'status', 'responses']) &&
+             data.userId == request.auth.uid &&
+             data.week is number &&
+             isValidDateString(data.date) &&
+             data.title is string && data.title.size() <= 100 &&
+             data.status in ['draft', 'completed'] &&
+             data.responses is map;
+    }
+
+    function isValidComment(data) {
+      return data.keys().hasAll(['id', 'collaborationId', 'authorId', 'authorName', 'text', 'createdAt']) &&
+             data.authorId == request.auth.uid &&
+             data.text is string && data.text.size() <= 2000;
+    }
+
+    function isCollabParticipant(collabData) {
+      return isAuthenticated() && 
+             (collabData.senderId == request.auth.uid || 
+              collabData.senderEmail == request.auth.token.email ||
+              collabData.recipientEmail == request.auth.token.email);
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'trainee' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /reflections/{reflectionId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidReflection(request.resource.data);
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && isValidReflection(request.resource.data);
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    match /collaborations/{collabId} {
+      allow read: if isCollabParticipant(resource.data) || isAdmin();
+      allow create: if isAuthenticated() && 
+                      request.resource.data.senderId == request.auth.uid &&
+                      request.resource.data.senderEmail == request.auth.token.email &&
+                      request.resource.data.status == 'pending';
+      allow update: if isCollabParticipant(resource.data) && 
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) || isAdmin());
+      allow delete: if isAuthenticated() && (resource.data.senderId == request.auth.uid || isAdmin());
+
+      match /comments/{commentId} {
+        allow read: if isCollabParticipant(get(/databases/$(database)/documents/collaborations/$(collabId)).data) || isAdmin();
+        allow create: if isAuthenticated() && isValidComment(request.resource.data);
+      }
+    }
+  }
+}
