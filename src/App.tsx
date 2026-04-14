@@ -43,8 +43,8 @@ const STORAGE_KEYS = {
   SETTINGS: 'reflected_settings'
 };
 
-import { auth, db, googleProvider } from './firebase';
-import { onAuthStateChanged, signInWithPopup } from 'firebase/auth';
+import { auth, db } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
   addDoc, 
@@ -243,19 +243,6 @@ export default function App() {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    setIsLoggingIn(true);
-    try {
-      await signInWithPopup(auth, googleProvider);
-      // The onAuthStateChanged listener will handle the rest
-    } catch (error) {
-      console.error("Google Login failed", error);
-      alert("Failed to sign in with Google. Please check if popups are blocked.");
-    } finally {
-      setIsLoggingIn(false);
-    }
-  };
-
   const handleCreateReflection = () => {
     setActiveTab('reflect');
   };
@@ -352,30 +339,12 @@ export default function App() {
             <button 
               type="submit"
               disabled={isLoggingIn}
-              className="w-full bg-slate-900 dark:bg-slate-800 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-slate-800 dark:hover:bg-slate-700 transition-all shadow-lg disabled:opacity-70"
+              className="w-full bg-slate-900 dark:bg-brand-600 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-3 hover:bg-slate-800 dark:hover:bg-brand-700 transition-all shadow-lg disabled:opacity-70"
             >
               {isLoggingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : <LogIn className="w-5 h-5" />}
               Enter ReflectED
             </button>
           </form>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-100 dark:border-slate-800"></div>
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white dark:bg-slate-900 px-2 text-slate-400 font-bold tracking-widest">Or continue with</span>
-            </div>
-          </div>
-
-          <button 
-            onClick={handleGoogleLogin}
-            disabled={isLoggingIn}
-            className="w-full bg-white dark:bg-slate-800 text-slate-900 dark:text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-3 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all shadow-sm disabled:opacity-70"
-          >
-            {isLoggingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : <Users className="w-5 h-5 text-brand-500" />}
-            Sign in with Google
-          </button>
           
           <div className="flex justify-center gap-4 pt-4 border-t border-slate-100 dark:border-slate-800">
             <button onClick={toggleDarkMode} className="p-2 text-slate-400 hover:text-brand-500 transition-colors">

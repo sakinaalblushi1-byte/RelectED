@@ -18,6 +18,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { db, auth, googleProvider, handleFirestoreError, OperationType } from '../firebase';
+import { signInWithPopup, signInWithRedirect } from 'firebase/auth';
 import { 
   collection, 
   addDoc, 
@@ -121,13 +122,24 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
     } catch (error: any) {
       console.error("Login failed", error);
       if (error.code === 'auth/popup-blocked') {
-        setAuthError("The sign-in popup was blocked by your browser. Please allow popups for this site and try again.");
+        setAuthError("The sign-in popup was blocked. Please allow popups or try the redirect method below.");
       } else if (error.code === 'auth/cancelled-popup-request') {
         // Ignore user cancellation
       } else {
-        setAuthError("Failed to sign in with Google. Please try again.");
+        setAuthError("Failed to sign in with Google. Try the redirect method below.");
       }
     } finally {
+      setIsLoggingInGoogle(false);
+    }
+  };
+
+  const handleRedirectLogin = async () => {
+    setIsLoggingInGoogle(true);
+    try {
+      await signInWithRedirect(auth, googleProvider);
+    } catch (error) {
+      console.error("Redirect login failed", error);
+      setAuthError("Redirect login failed. Please try again.");
       setIsLoggingInGoogle(false);
     }
   };
@@ -247,6 +259,15 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
           )}
           {isLoggingInGoogle ? "Connecting..." : "Sign in with Google"}
         </button>
+
+        <div className="text-center">
+          <button 
+            onClick={handleRedirectLogin}
+            className="text-xs text-slate-400 hover:text-brand-600 underline transition-colors"
+          >
+            Trouble signing in? Try redirect method
+          </button>
+        </div>
       </div>
     );
   }
