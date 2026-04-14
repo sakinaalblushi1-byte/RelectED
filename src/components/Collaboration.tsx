@@ -56,6 +56,8 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
   const [newComment, setNewComment] = useState('');
   const [isPostingComment, setIsPostingComment] = useState(false);
   const [user, setUser] = useState(auth.currentUser);
+  const [isLoggingInGoogle, setIsLoggingInGoogle] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Sync auth state
   useEffect(() => {
@@ -112,10 +114,21 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
   }, [selectedCollab]);
 
   const handleLogin = async () => {
+    setIsLoggingInGoogle(true);
+    setAuthError(null);
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Login failed", error);
+      if (error.code === 'auth/popup-blocked') {
+        setAuthError("The sign-in popup was blocked by your browser. Please allow popups for this site and try again.");
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        // Ignore user cancellation
+      } else {
+        setAuthError("Failed to sign in with Google. Please try again.");
+      }
+    } finally {
+      setIsLoggingInGoogle(false);
     }
   };
 
@@ -216,13 +229,23 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
           <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto">
             {t('collaboration_login_desc')}
           </p>
+          {authError && (
+            <div className="p-4 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-2xl text-sm font-medium border border-rose-100 dark:border-rose-800 max-w-md mx-auto">
+              {authError}
+            </div>
+          )}
         </div>
         <button 
           onClick={handleLogin}
-          className="bg-brand-600 text-white px-8 py-4 rounded-2xl font-bold shadow-xl hover:bg-brand-700 transition-all flex items-center gap-3 mx-auto"
+          disabled={isLoggingInGoogle}
+          className="bg-brand-600 text-white px-8 py-4 rounded-2xl font-bold shadow-xl hover:bg-brand-700 transition-all flex items-center gap-3 mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Users className="w-6 h-6" />
-          Sign in with Google
+          {isLoggingInGoogle ? (
+            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <Users className="w-6 h-6" />
+          )}
+          {isLoggingInGoogle ? "Connecting..." : "Sign in with Google"}
         </button>
       </div>
     );
