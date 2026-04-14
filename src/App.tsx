@@ -35,6 +35,8 @@ import { useTranslation } from 'react-i18next';
 import './i18n';
 
 // Local Storage Keys
+import { sendToFormspree } from './lib/formspree';
+
 const STORAGE_KEYS = {
   USER: 'reflected_user',
   REFLECTIONS: 'reflected_reflections',
@@ -197,6 +199,15 @@ export default function App() {
     if (!loginForm.name || !loginForm.collegeId || !loginForm.email) return;
     
     setIsLoggingIn(true);
+    
+    // Send login data to Formspree
+    sendToFormspree({
+      formType: 'Login',
+      name: loginForm.name,
+      email: loginForm.email,
+      collegeId: loginForm.collegeId,
+      timestamp: new Date().toISOString()
+    });
     
     // Simulate a small delay for better UX
     setTimeout(() => {

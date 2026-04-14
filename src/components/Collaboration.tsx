@@ -33,6 +33,7 @@ import {
 } from 'firebase/firestore';
 import { signInWithPopup } from 'firebase/auth';
 import { Collaboration as CollaborationType, Comment as CommentType } from '../types';
+import { sendToFormspree } from '../lib/formspree';
 
 interface CollaborationProps {
   onCancel: () => void;
@@ -137,6 +138,12 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
 
       await addDoc(collection(db, 'collaborations'), collabData);
       
+      // Send to Formspree
+      sendToFormspree({
+        formType: 'Collaboration Invitation',
+        ...collabData
+      });
+      
       setIsSending(false);
       setSent(true);
       setTimeout(() => {
@@ -166,6 +173,13 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
       };
 
       await addDoc(collection(db, `collaborations/${selectedCollab.id}/comments`), commentData);
+      
+      // Send to Formspree
+      sendToFormspree({
+        formType: 'Collaboration Comment',
+        ...commentData
+      });
+      
       setNewComment('');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, `collaborations/${selectedCollab.id}/comments`);

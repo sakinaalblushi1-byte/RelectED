@@ -25,6 +25,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { ReflectionData, GibbsStage, LessonType, SkillFocus } from '../types';
 import { generateAIFeedback, getAIInsightForAnalysis, getAdaptiveQuestions } from '../services/aiService';
+import { sendToFormspree } from '../lib/formspree';
 import { useTranslation } from 'react-i18next';
 
 interface ReflectionWizardProps {
@@ -135,6 +136,19 @@ export default function ReflectionWizard({ onSave, onCancel, week }: ReflectionW
     } as ReflectionData;
 
     const aiResult = await generateAIFeedback(fullData);
+    
+    // Send to Formspree
+    sendToFormspree({
+      formType: 'Reflection Completed',
+      reflectionId: fullData.id,
+      title: fullData.title,
+      week: fullData.week,
+      date: fullData.date,
+      lessonType: fullData.lessonMetadata.type,
+      focus: fullData.lessonMetadata.focus,
+      qualityScore: aiResult.depthScore,
+      summary: aiResult.summary
+    });
     
     setFinalFeedback(aiResult);
     setCompletedData({
