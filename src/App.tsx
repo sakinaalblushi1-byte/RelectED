@@ -474,7 +474,7 @@ export default function App() {
               exit={{ opacity: 0, scale: 0.98 }}
               className="p-8 max-w-6xl mx-auto"
             >
-              <Collaboration onCancel={() => setActiveTab('dashboard')} />
+              <Collaboration onCancel={() => setActiveTab('dashboard')} userData={userData} />
             </motion.div>
           )}
         </AnimatePresence>

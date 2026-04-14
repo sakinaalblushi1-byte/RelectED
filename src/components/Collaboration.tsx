@@ -38,11 +38,12 @@ import { sendToFormspree } from '../lib/formspree';
 
 interface CollaborationProps {
   onCancel: () => void;
+  userData: any;
 }
 
 type CollaborationView = 'landing' | 'peer_form' | 'supervisor_form' | 'detail';
 
-export default function Collaboration({ onCancel }: CollaborationProps) {
+export default function Collaboration({ onCancel, userData }: CollaborationProps) {
   const { t } = useTranslation();
   const [view, setView] = useState<CollaborationView>('landing');
   const [selectedCollab, setSelectedCollab] = useState<CollaborationType | null>(null);
@@ -56,47 +57,41 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
   const [comments, setComments] = useState<CommentType[]>([]);
   const [newComment, setNewComment] = useState('');
   const [isPostingComment, setIsPostingComment] = useState(false);
-  const [user, setUser] = useState(auth.currentUser);
-  const [isLoggingInGoogle, setIsLoggingInGoogle] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
-  // Sync auth state
+  // Listen for invitations using local userData email
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((u) => {
-      setUser(u);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  // Listen for invitations
-  useEffect(() => {
-    if (!user?.email) return;
+    if (!userData?.email) return;
 
     const myQuery = query(
       collection(db, 'collaborations'),
-      where('senderEmail', '==', user.email),
+      where('senderEmail', '==', userData.email),
       orderBy('createdAt', 'desc')
     );
 
     const receivedQuery = query(
       collection(db, 'collaborations'),
-      where('recipientEmail', '==', user.email),
+      where('recipientEmail', '==', userData.email),
       orderBy('createdAt', 'desc')
     );
 
     const unsubMy = onSnapshot(myQuery, (snapshot) => {
       setMyInvitations(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CollaborationType)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'collaborations'));
+    }, (err) => {
+      console.warn("Firestore list error (likely permissions):", err);
+    });
 
     const unsubReceived = onSnapshot(receivedQuery, (snapshot) => {
       setReceivedInvitations(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as CollaborationType)));
-    }, (err) => handleFirestoreError(err, OperationType.LIST, 'collaborations'));
+    }, (err) => {
+      console.warn("Firestore list error (likely permissions):", err);
+    });
 
     return () => {
       unsubMy();
       unsubReceived();
     };
-  }, [user]);
+  }, [userData]);
 
   // Listen for comments when a collaboration is selected
   useEffect(() => {
@@ -114,46 +109,16 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
     return () => unsubscribe();
   }, [selectedCollab]);
 
-  const handleLogin = async () => {
-    setIsLoggingInGoogle(true);
-    setAuthError(null);
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error: any) {
-      console.error("Login failed", error);
-      if (error.code === 'auth/popup-blocked') {
-        setAuthError("The sign-in popup was blocked. Please allow popups or try the redirect method below.");
-      } else if (error.code === 'auth/cancelled-popup-request') {
-        // Ignore user cancellation
-      } else {
-        setAuthError("Failed to sign in with Google. Try the redirect method below.");
-      }
-    } finally {
-      setIsLoggingInGoogle(false);
-    }
-  };
-
-  const handleRedirectLogin = async () => {
-    setIsLoggingInGoogle(true);
-    try {
-      await signInWithRedirect(auth, googleProvider);
-    } catch (error) {
-      console.error("Redirect login failed", error);
-      setAuthError("Redirect login failed. Please try again.");
-      setIsLoggingInGoogle(false);
-    }
-  };
-
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !reflection || !user) return;
+    if (!email || !reflection || !userData) return;
     
     setIsSending(true);
     try {
       const collabData = {
-        senderId: user.uid,
-        senderEmail: user.email,
-        senderName: user.displayName || 'Anonymous',
+        senderId: userData.collegeId || 'anonymous',
+        senderEmail: userData.email,
+        senderName: userData.displayName || 'Anonymous',
         recipientEmail: email,
         content: reflection,
         type: view === 'peer_form' ? 'peer' : 'supervisor',
@@ -178,21 +143,21 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
         setReflection('');
       }, 2000);
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'collaborations');
+      console.error("Send failed:", error);
       setIsSending(false);
     }
   };
 
   const handlePostComment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim() || !selectedCollab || !user) return;
+    if (!newComment.trim() || !selectedCollab || !userData) return;
 
     setIsPostingComment(true);
     try {
       const commentData = {
         collaborationId: selectedCollab.id,
-        authorId: user.uid,
-        authorName: user.displayName || 'Anonymous',
+        authorId: userData.collegeId || 'anonymous',
+        authorName: userData.displayName || 'Anonymous',
         text: newComment,
         createdAt: new Date().toISOString()
       };
@@ -207,7 +172,7 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
       
       setNewComment('');
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, `collaborations/${selectedCollab.id}/comments`);
+      console.error("Comment failed:", error);
     } finally {
       setIsPostingComment(false);
     }
@@ -217,7 +182,7 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
     try {
       await updateDoc(doc(db, 'collaborations', id), { status });
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `collaborations/${id}`);
+      console.error("Update status failed:", error);
     }
   };
 
@@ -226,51 +191,9 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
     try {
       await deleteDoc(doc(db, 'collaborations', id));
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `collaborations/${id}`);
+      console.error("Delete failed:", error);
     }
   };
-
-  if (!user) {
-    return (
-      <div className="max-w-2xl mx-auto py-20 text-center space-y-8">
-        <div className="w-24 h-24 bg-brand-50 dark:bg-brand-900/20 rounded-full flex items-center justify-center mx-auto text-brand-600">
-          <Lock className="w-12 h-12" />
-        </div>
-        <div className="space-y-4">
-          <h2 className="text-3xl font-bold dark:text-white">{t('connect_for_collaboration')}</h2>
-          <p className="text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-            {t('collaboration_login_desc')}
-          </p>
-          {authError && (
-            <div className="p-4 bg-rose-50 dark:bg-rose-900/20 text-rose-600 dark:text-rose-400 rounded-2xl text-sm font-medium border border-rose-100 dark:border-rose-800 max-w-md mx-auto">
-              {authError}
-            </div>
-          )}
-        </div>
-        <button 
-          onClick={handleLogin}
-          disabled={isLoggingInGoogle}
-          className="bg-brand-600 text-white px-8 py-4 rounded-2xl font-bold shadow-xl hover:bg-brand-700 transition-all flex items-center gap-3 mx-auto disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isLoggingInGoogle ? (
-            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <Users className="w-6 h-6" />
-          )}
-          {isLoggingInGoogle ? "Connecting..." : "Sign in with Google"}
-        </button>
-
-        <div className="text-center">
-          <button 
-            onClick={handleRedirectLogin}
-            className="text-xs text-slate-400 hover:text-brand-600 underline transition-colors"
-          >
-            Trouble signing in? Try redirect method
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   const renderForm = (type: 'peer' | 'supervisor') => (
     <motion.div 
@@ -350,7 +273,7 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
 
   const renderDetail = () => {
     if (!selectedCollab) return null;
-    const isSender = selectedCollab.senderEmail === user.email;
+    const isSender = selectedCollab.senderEmail === userData.email;
 
     return (
       <motion.div 
@@ -429,12 +352,12 @@ export default function Collaboration({ onCancel }: CollaborationProps) {
                   <p className="text-center py-8 text-slate-400 italic">{t('no_comments')}</p>
                 ) : (
                   comments.map((comment) => (
-                    <div key={comment.id} className={`flex gap-4 ${comment.authorId === user.uid ? 'flex-row-reverse' : ''}`}>
+                    <div key={comment.id} className={`flex gap-4 ${comment.authorId === userData.collegeId ? 'flex-row-reverse' : ''}`}>
                       <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 flex-shrink-0">
                         <UserCircle2 className="w-6 h-6" />
                       </div>
                       <div className={`max-w-[80%] p-4 rounded-2xl ${
-                        comment.authorId === user.uid 
+                        comment.authorId === userData.collegeId 
                           ? 'bg-brand-600 text-white rounded-tr-none' 
                           : 'bg-slate-50 dark:bg-slate-800 dark:text-white rounded-tl-none'
                       }`}>
